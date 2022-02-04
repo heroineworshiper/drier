@@ -110,6 +110,7 @@
 
 // A0 - LED
 // A1 - pump
+// A2/AN2 - resistor fuse
 // A3 - fan
 // B3 - I2C 0 clock
 // B2 - I2C 0 data

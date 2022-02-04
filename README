@@ -4,9 +4,18 @@ This measures dew point on the inside & outside of a container, pumping
 in air when the outside dewpoint is lower than the inside dewpoint.
 
 It's based on a PIC 18F1220 with some MOSFETs to control a fan & pump. 
+
+Temperature & humidity are measured by 2 AHT20's.  Everything runs on
+5V.  A 1R resistor drops the voltage feeding the pump.  Voltage measured
+at the low point of the resistor detects a stall.
+
 The fan circulates air in the container & the pump pumps outside air
 in.  It's usually more convenient to suck inside air out so the lid
 doesn't pop off.
+
+The tubing has valves so the container can be sealed off for storage.
+
+diagram.png: high level diagram of the circuit
 
 drier.X: firmware
 
