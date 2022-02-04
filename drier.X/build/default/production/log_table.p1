@@ -1,0 +1,337 @@
+Version 3.2 HI-TECH Software Intermediate Code
+[; ;stdint.h: 13: typedef signed char int8_t;
+[; ;stdint.h: 20: typedef signed int int16_t;
+[; ;stdint.h: 28: typedef signed short long int int24_t;
+[; ;stdint.h: 36: typedef signed long int int32_t;
+[; ;stdint.h: 43: typedef unsigned char uint8_t;
+[; ;stdint.h: 49: typedef unsigned int uint16_t;
+[; ;stdint.h: 56: typedef unsigned short long int uint24_t;
+[; ;stdint.h: 63: typedef unsigned long int uint32_t;
+[; ;stdint.h: 71: typedef signed char int_least8_t;
+[; ;stdint.h: 78: typedef signed int int_least16_t;
+[; ;stdint.h: 90: typedef signed short long int int_least24_t;
+[; ;stdint.h: 98: typedef signed long int int_least32_t;
+[; ;stdint.h: 105: typedef unsigned char uint_least8_t;
+[; ;stdint.h: 111: typedef unsigned int uint_least16_t;
+[; ;stdint.h: 121: typedef unsigned short long int uint_least24_t;
+[; ;stdint.h: 128: typedef unsigned long int uint_least32_t;
+[; ;stdint.h: 137: typedef signed char int_fast8_t;
+[; ;stdint.h: 144: typedef signed int int_fast16_t;
+[; ;stdint.h: 156: typedef signed short long int int_fast24_t;
+[; ;stdint.h: 164: typedef signed long int int_fast32_t;
+[; ;stdint.h: 171: typedef unsigned char uint_fast8_t;
+[; ;stdint.h: 177: typedef unsigned int uint_fast16_t;
+[; ;stdint.h: 187: typedef unsigned short long int uint_fast24_t;
+[; ;stdint.h: 194: typedef unsigned long int uint_fast32_t;
+[; ;stdint.h: 200: typedef int32_t intmax_t;
+[; ;stdint.h: 205: typedef uint32_t uintmax_t;
+[; ;stdint.h: 210: typedef int16_t intptr_t;
+[; ;stdint.h: 215: typedef uint16_t uintptr_t;
+"2 log_table.c
+[v _log_table `Cuc ~T0 @X0 -> 0 `x e ]
+[i _log_table
+:U ..
+"3
+-> -> 255 `i `uc
+"4
+-> -> 147 `i `uc
+"5
+-> -> 250 `i `uc
+"6
+-> -> 224 `i `uc
+"7
+-> -> 206 `i `uc
+"8
+-> -> 191 `i `uc
+"9
+-> -> 180 `i `uc
+"10
+-> -> 170 `i `uc
+"11
+-> -> 161 `i `uc
+"12
+-> -> 154 `i `uc
+"13
+-> -> 147 `i `uc
+"14
+-> -> 141 `i `uc
+"15
+-> -> 135 `i `uc
+"16
+-> -> 130 `i `uc
+"17
+-> -> 251 `i `uc
+"18
+-> -> 242 `i `uc
+"19
+-> -> 234 `i `uc
+"20
+-> -> 226 `i `uc
+"21
+-> -> 219 `i `uc
+"22
+-> -> 212 `i `uc
+"23
+-> -> 206 `i `uc
+"24
+-> -> 199 `i `uc
+"25
+-> -> 193 `i `uc
+"26
+-> -> 188 `i `uc
+"27
+-> -> 182 `i `uc
+"28
+-> -> 177 `i `uc
+"29
+-> -> 172 `i `uc
+"30
+-> -> 167 `i `uc
+"31
+-> -> 162 `i `uc
+"32
+-> -> 158 `i `uc
+"33
+-> -> 154 `i `uc
+"34
+-> -> 149 `i `uc
+"35
+-> -> 145 `i `uc
+"36
+-> -> 141 `i `uc
+"37
+-> -> 138 `i `uc
+"38
+-> -> 134 `i `uc
+"39
+-> -> 130 `i `uc
+"40
+-> -> 254 `i `uc
+"41
+-> -> 247 `i `uc
+"42
+-> -> 241 `i `uc
+"43
+-> -> 234 `i `uc
+"44
+-> -> 228 `i `uc
+"45
+-> -> 222 `i `uc
+"46
+-> -> 216 `i `uc
+"47
+-> -> 210 `i `uc
+"48
+-> -> 204 `i `uc
+"49
+-> -> 198 `i `uc
+"50
+-> -> 193 `i `uc
+"51
+-> -> 187 `i `uc
+"52
+-> -> 182 `i `uc
+"53
+-> -> 177 `i `uc
+"54
+-> -> 172 `i `uc
+"55
+-> -> 167 `i `uc
+"56
+-> -> 162 `i `uc
+"57
+-> -> 157 `i `uc
+"58
+-> -> 153 `i `uc
+"59
+-> -> 148 `i `uc
+"60
+-> -> 143 `i `uc
+"61
+-> -> 139 `i `uc
+"62
+-> -> 135 `i `uc
+"63
+-> -> 130 `i `uc
+"64
+-> -> 126 `i `uc
+"65
+-> -> 122 `i `uc
+"66
+-> -> 118 `i `uc
+"67
+-> -> 114 `i `uc
+"68
+-> -> 110 `i `uc
+"69
+-> -> 106 `i `uc
+"70
+-> -> 102 `i `uc
+"71
+-> -> 98 `i `uc
+"72
+-> -> 94 `i `uc
+"73
+-> -> 91 `i `uc
+"74
+-> -> 87 `i `uc
+"75
+-> -> 84 `i `uc
+"76
+-> -> 80 `i `uc
+"77
+-> -> 77 `i `uc
+"78
+-> -> 73 `i `uc
+"79
+-> -> 70 `i `uc
+"80
+-> -> 66 `i `uc
+"81
+-> -> 63 `i `uc
+"82
+-> -> 60 `i `uc
+"83
+-> -> 57 `i `uc
+"84
+-> -> 53 `i `uc
+"85
+-> -> 50 `i `uc
+"86
+-> -> 47 `i `uc
+"87
+-> -> 44 `i `uc
+"88
+-> -> 41 `i `uc
+"89
+-> -> 38 `i `uc
+"90
+-> -> 35 `i `uc
+"91
+-> -> 32 `i `uc
+"92
+-> -> 29 `i `uc
+"93
+-> -> 26 `i `uc
+"94
+-> -> 24 `i `uc
+"95
+-> -> 21 `i `uc
+"96
+-> -> 18 `i `uc
+"97
+-> -> 15 `i `uc
+"98
+-> -> 13 `i `uc
+"99
+-> -> 10 `i `uc
+"100
+-> -> 7 `i `uc
+"101
+-> -> 5 `i `uc
+"102
+-> -> 2 `i `uc
+..
+]
+[; ;log_table.c: 2: const uint8_t log_table[] = {
+[; ;log_table.c: 3: 255,
+[; ;log_table.c: 4: 147,
+[; ;log_table.c: 5: 250,
+[; ;log_table.c: 6: 224,
+[; ;log_table.c: 7: 206,
+[; ;log_table.c: 8: 191,
+[; ;log_table.c: 9: 180,
+[; ;log_table.c: 10: 170,
+[; ;log_table.c: 11: 161,
+[; ;log_table.c: 12: 154,
+[; ;log_table.c: 13: 147,
+[; ;log_table.c: 14: 141,
+[; ;log_table.c: 15: 135,
+[; ;log_table.c: 16: 130,
+[; ;log_table.c: 17: 251,
+[; ;log_table.c: 18: 242,
+[; ;log_table.c: 19: 234,
+[; ;log_table.c: 20: 226,
+[; ;log_table.c: 21: 219,
+[; ;log_table.c: 22: 212,
+[; ;log_table.c: 23: 206,
+[; ;log_table.c: 24: 199,
+[; ;log_table.c: 25: 193,
+[; ;log_table.c: 26: 188,
+[; ;log_table.c: 27: 182,
+[; ;log_table.c: 28: 177,
+[; ;log_table.c: 29: 172,
+[; ;log_table.c: 30: 167,
+[; ;log_table.c: 31: 162,
+[; ;log_table.c: 32: 158,
+[; ;log_table.c: 33: 154,
+[; ;log_table.c: 34: 149,
+[; ;log_table.c: 35: 145,
+[; ;log_table.c: 36: 141,
+[; ;log_table.c: 37: 138,
+[; ;log_table.c: 38: 134,
+[; ;log_table.c: 39: 130,
+[; ;log_table.c: 40: 254,
+[; ;log_table.c: 41: 247,
+[; ;log_table.c: 42: 241,
+[; ;log_table.c: 43: 234,
+[; ;log_table.c: 44: 228,
+[; ;log_table.c: 45: 222,
+[; ;log_table.c: 46: 216,
+[; ;log_table.c: 47: 210,
+[; ;log_table.c: 48: 204,
+[; ;log_table.c: 49: 198,
+[; ;log_table.c: 50: 193,
+[; ;log_table.c: 51: 187,
+[; ;log_table.c: 52: 182,
+[; ;log_table.c: 53: 177,
+[; ;log_table.c: 54: 172,
+[; ;log_table.c: 55: 167,
+[; ;log_table.c: 56: 162,
+[; ;log_table.c: 57: 157,
+[; ;log_table.c: 58: 153,
+[; ;log_table.c: 59: 148,
+[; ;log_table.c: 60: 143,
+[; ;log_table.c: 61: 139,
+[; ;log_table.c: 62: 135,
+[; ;log_table.c: 63: 130,
+[; ;log_table.c: 64: 126,
+[; ;log_table.c: 65: 122,
+[; ;log_table.c: 66: 118,
+[; ;log_table.c: 67: 114,
+[; ;log_table.c: 68: 110,
+[; ;log_table.c: 69: 106,
+[; ;log_table.c: 70: 102,
+[; ;log_table.c: 71: 98,
+[; ;log_table.c: 72: 94,
+[; ;log_table.c: 73: 91,
+[; ;log_table.c: 74: 87,
+[; ;log_table.c: 75: 84,
+[; ;log_table.c: 76: 80,
+[; ;log_table.c: 77: 77,
+[; ;log_table.c: 78: 73,
+[; ;log_table.c: 79: 70,
+[; ;log_table.c: 80: 66,
+[; ;log_table.c: 81: 63,
+[; ;log_table.c: 82: 60,
+[; ;log_table.c: 83: 57,
+[; ;log_table.c: 84: 53,
+[; ;log_table.c: 85: 50,
+[; ;log_table.c: 86: 47,
+[; ;log_table.c: 87: 44,
+[; ;log_table.c: 88: 41,
+[; ;log_table.c: 89: 38,
+[; ;log_table.c: 90: 35,
+[; ;log_table.c: 91: 32,
+[; ;log_table.c: 92: 29,
+[; ;log_table.c: 93: 26,
+[; ;log_table.c: 94: 24,
+[; ;log_table.c: 95: 21,
+[; ;log_table.c: 96: 18,
+[; ;log_table.c: 97: 15,
+[; ;log_table.c: 98: 13,
+[; ;log_table.c: 99: 10,
+[; ;log_table.c: 100: 7,
+[; ;log_table.c: 101: 5,
+[; ;log_table.c: 102: 2,
+[; ;log_table.c: 103: };

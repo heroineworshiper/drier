@@ -1,0 +1,196 @@
+
+# 1 "log_table.c"
+
+# 13 "/opt/microchip/xc8/v1.45/include/stdint.h"
+typedef signed char int8_t;
+
+# 20
+typedef signed int int16_t;
+
+# 28
+typedef signed short long int int24_t;
+
+# 36
+typedef signed long int int32_t;
+
+# 43
+typedef unsigned char uint8_t;
+
+# 49
+typedef unsigned int uint16_t;
+
+# 56
+typedef unsigned short long int uint24_t;
+
+# 63
+typedef unsigned long int uint32_t;
+
+# 71
+typedef signed char int_least8_t;
+
+# 78
+typedef signed int int_least16_t;
+
+# 90
+typedef signed short long int int_least24_t;
+
+# 98
+typedef signed long int int_least32_t;
+
+# 105
+typedef unsigned char uint_least8_t;
+
+# 111
+typedef unsigned int uint_least16_t;
+
+# 121
+typedef unsigned short long int uint_least24_t;
+
+# 128
+typedef unsigned long int uint_least32_t;
+
+# 137
+typedef signed char int_fast8_t;
+
+# 144
+typedef signed int int_fast16_t;
+
+# 156
+typedef signed short long int int_fast24_t;
+
+# 164
+typedef signed long int int_fast32_t;
+
+# 171
+typedef unsigned char uint_fast8_t;
+
+# 177
+typedef unsigned int uint_fast16_t;
+
+# 187
+typedef unsigned short long int uint_fast24_t;
+
+# 194
+typedef unsigned long int uint_fast32_t;
+
+# 200
+typedef int32_t intmax_t;
+
+
+
+
+typedef uint32_t uintmax_t;
+
+
+
+
+typedef int16_t intptr_t;
+
+
+
+
+typedef uint16_t uintptr_t;
+
+# 2 "log_table.c"
+const uint8_t log_table[] = {
+255,
+147,
+250,
+224,
+206,
+191,
+180,
+170,
+161,
+154,
+147,
+141,
+135,
+130,
+251,
+242,
+234,
+226,
+219,
+212,
+206,
+199,
+193,
+188,
+182,
+177,
+172,
+167,
+162,
+158,
+154,
+149,
+145,
+141,
+138,
+134,
+130,
+254,
+247,
+241,
+234,
+228,
+222,
+216,
+210,
+204,
+198,
+193,
+187,
+182,
+177,
+172,
+167,
+162,
+157,
+153,
+148,
+143,
+139,
+135,
+130,
+126,
+122,
+118,
+114,
+110,
+106,
+102,
+98,
+94,
+91,
+87,
+84,
+80,
+77,
+73,
+70,
+66,
+63,
+60,
+57,
+53,
+50,
+47,
+44,
+41,
+38,
+35,
+32,
+29,
+26,
+24,
+21,
+18,
+15,
+13,
+10,
+7,
+5,
+2,
+};

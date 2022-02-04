@@ -1,0 +1,22 @@
+Solar filament drier
+
+
+drier.X: firmware
+
+plug.FCStd: airtight seal for tupperware
+
+*.ods: data from test runs
+
+tables.py: generate the fixed point log table
+
+test.c: test the fixed point log table
+
+
+
+
+
+
+
+
+
+
