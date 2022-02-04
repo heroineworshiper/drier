@@ -1,5 +1,8 @@
 Solar filament drier
 
+This measures dew point on the inside & outside of a container, pumping
+in air when the outside dewpoint is lower than the inside dewpoint.
+
 
 drier.X: firmware
 
