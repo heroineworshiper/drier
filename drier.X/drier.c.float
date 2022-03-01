@@ -161,6 +161,9 @@ volatile uint8_t fuse_tick = 0;
 volatile uint8_t led_tick = 0;
 // count sensor readings during duty cycle
 volatile uint8_t duty_counter = 0;
+// downsample the output
+uint8_t print_counter = 0;
+#define PRINT_DOWNSAMPLE 6
 
 #define I2C_ADDRESS (0x38 << 1)
 #define AHTX0_I2CADDR_DEFAULT 0x38   ///< AHT default i2c address
@@ -293,7 +296,7 @@ void print_float(float x)
     send_uart('.');
 
 
-    uint16_t frac = x - (uint8_t)x * 100;
+    uint16_t frac = (uint16_t)(x * 100) % 100;
     force = 1;
     NUMBER_MACRO(10, frac)
     send_uart('0' + frac);
@@ -552,7 +555,7 @@ void read_aht20(aht20_t *ptr)
     const float B = 17.67;
     const float C = 243.5;
     
-    float y = log(ptr->h) + 
+    float y = log(ptr->h / 100) + 
         B * ptr->t / (C + ptr->t);
     ptr->dp = C * y / (B - y);
     
@@ -591,8 +594,8 @@ int main(int argc, char** argv)
 // set the oscillator
 // 1Mhz
     OSCCON = 0b01000000;
-// tweek the BAUD if clockspeed is 31000
-//    OSCTUNE = 24;
+// make the UART support higher temperatures
+    OSCTUNE = 24;
 // start the ADC
     ADCON1 = 0b11111011;
     ADCON0 = 0b00001001;
@@ -614,7 +617,6 @@ int main(int argc, char** argv)
     BAUDCTL = 0b00001000;
 // 1200 baud from 31khz
 //    SPBRG = 6;
-// 9600 baud from 1Mhz
     SPBRG = 26;
 
 
@@ -684,10 +686,14 @@ int main(int argc, char** argv)
             read_aht20(&inside);
             read_aht20(&outside);
 
-            print_text("I: ");
-            print_sensor(&inside);
-            print_text("O: ");
-            print_sensor(&outside);
+            print_counter++;
+            if(print_counter >= PRINT_DOWNSAMPLE)
+            {
+                print_text("I: ");
+                print_sensor(&inside);
+                print_text("O: ");
+                print_sensor(&outside);
+            }
 
 // turn fan on if inside temp is higher than outside temp
             if(inside.t < outside.t)
@@ -708,7 +714,7 @@ int main(int argc, char** argv)
                     if(duty_counter >= DUTY_CYCLE_OFF)
                     {
                         flags.timed_out = 0;
-                        print_text("reached DUTY_CYCLE_OFF");
+                        //print_text("reached DUTY_CYCLE_OFF");
                     }
                 }
 
@@ -735,11 +741,16 @@ int main(int argc, char** argv)
                     {
                         flags.timed_out = 1;
                         duty_counter = 0;
-                        print_text("reached DUTY_CYCLE_ON");
+                        //print_text("reached DUTY_CYCLE_ON");
                     }
                 }
             }
-            print_lf();
+
+            if(print_counter >= PRINT_DOWNSAMPLE)
+            {
+                print_counter = 0;
+                print_lf();
+            }
 
 #else // !TEST_PUMP
             if(!PUMP_LAT)
@@ -807,7 +818,7 @@ void interrupt isr()
                 fuse_value = fuse_accum / fuse_count;
                 fuse_accum = 0;
                 fuse_count = 0;
-                
+
                 if(PUMP_LAT)
                 {
 // wait for starting torque
@@ -839,6 +850,7 @@ void interrupt isr()
 // flash LED if fuse blown
             if(led_tick == HZ / 2)
             {
+//print_text("TEST TEST TEST\n");
                 led_tick = 0;
                 if(flags.fuse_blown)
                 {
