@@ -108,7 +108,8 @@
 #include <math.h>
 
 // A0 - LED
-// A1 - servo
+// A1 - pump
+// A2/AN2 - fuse
 // A3 - fan
 // B3 - I2C 0 clock
 // B2 - I2C 0 data
@@ -127,47 +128,49 @@
 #define OFF_THRESHOLD 1.0
 
 // time between sensor readings
-#define SERVO_INTERVAL (HZ * 5)
-// time to run servo as number of sensor readings
-// this prevents motor wear
-#define DUTY_CYCLE 1
-// PWM timer value for open valve
-#define SERVO_OPEN 1900
-// PWM timer value for closed valve
-#define SERVO_CLOSE 3900
-// starting PWM timer value
-#define SERVO_INIT 2700
-// PWM timer value for 50hz
-#define SERVO_PERIOD 30000
+#define PUMP_INTERVAL (HZ * 5)
+// duty cycle as number of sensor readings
+// this limits the maximum rate of drying but also prevents motor burnout
+#define DUTY_CYCLE_ON 24
+#define DUTY_CYCLE_OFF 6
 
+// If the pump is prone to stalling
+//#define USE_FUSE
 
-//#define USE_LED
+#ifdef USE_FUSE
+// time between fuse tests
+#define FUSE_INTERVAL (HZ / 4)
+// ticks to wait after starting
+#define FUSE_DEADBAND (HZ)
+// ADC value for blown fuse
+#define FUSE_THRESHOLD 210
 
+uint32_t fuse_accum;
+uint8_t fuse_value;
+uint16_t fuse_count;
+#endif // USE_FUSE
 
-#define SERVO_TRIS TRISAbits.TRISA1
-#define SERVO_LAT LATAbits.LATA1
+#define PUMP_TRIS TRISAbits.TRISA1
+#define PUMP_LAT LATAbits.LATA1
 
 #define FAN_TRIS TRISAbits.TRISA3
 #define FAN_LAT LATAbits.LATA3
 
-#ifdef USE_LED
 #define LED_TRIS TRISAbits.TRISA0
 #define LED_LAT LATAbits.LATA0
-#endif
 
 // Mane timer values
 #define HZ 32
-#define TIMER_VALUE -62496
-// ticks since the last sensor reading
-volatile uint8_t servo_tick = 0;
-volatile uint16_t servo_pwm = SERVO_INIT;
-// value to be only updated in the interrupt handler
-volatile uint16_t servo_pwm2 = SERVO_INIT;
-#ifdef USE_LED
+#define TIMER_VALUE -7812
+volatile uint8_t pump_tick = 0;
 volatile uint8_t led_tick = 0;
-#endif
 
-// sensor readings since the servo was turned on
+#ifdef USE_FUSE
+// count ticks for averaging fuse value
+volatile uint8_t fuse_tick = 0;
+#endif // USE_FUSE
+
+// count sensor readings during duty cycle
 volatile uint8_t duty_counter = 0;
 // downsample the output
 uint8_t print_counter = 0;
@@ -189,9 +192,14 @@ typedef union
 	struct
 	{
 		unsigned interrupt_complete : 1;
-        unsigned update_servo : 1;
-        unsigned servo_enabled : 1; // drive the PWM pin
-        unsigned pwm_on : 1; // which part of the PWM waveform we're in
+        unsigned update_pump : 1;
+        unsigned timed_out : 1; // hit duty cycle
+
+#ifdef USE_FUSE
+        unsigned fuse_blown : 1; // don't start pump
+        unsigned ignore_fuse : 1; // ignore fuse until deadband is complete
+        unsigned got_fuse : 1; // got new fuse value
+#endif // USE_FUSE
 	};
 	
 	unsigned char value;
@@ -599,9 +607,9 @@ int main(int argc, char** argv)
 {
 // set the oscillator
 // 1Mhz
-    OSCCON = 0b01110000;
-// make the UART support higher temperatures at 1Mhz
-//    OSCTUNE = 24;
+    OSCCON = 0b01000000;
+// make the UART support higher temperatures
+    OSCTUNE = 24;
 
 
 #ifdef USE_FUSE
@@ -614,11 +622,8 @@ int main(int argc, char** argv)
 #endif // USE_FUSE
 
 	flags.value = 0;
-    flags.servo_enabled = 1;
-    servo_tick = 0;
-#ifdef USE_LED
+    pump_tick = 0;
     led_tick = 0;
-#endif
 
 #ifdef USE_FUSE
     fuse_tick = 0;
@@ -633,10 +638,7 @@ int main(int argc, char** argv)
     BAUDCTL = 0b00001000;
 // 1200 baud from 31khz
 //    SPBRG = 6;
-// 9600 baud at 1Mhz clock
-//    SPBRG = 26;
-// 9600 baud at 8Mhz clock
-    SPBRG = 208;
+    SPBRG = 26;
 
 
 // I2C ports
@@ -650,15 +652,14 @@ int main(int argc, char** argv)
     LATBbits.LATB3 = 0;
     LATBbits.LATB2 = 0;
 
-    SERVO_LAT = 0;
-    SERVO_TRIS = 0;
+// MOSFET ports
+    PUMP_LAT = 0;
+    PUMP_TRIS = 0;
     FAN_LAT = 0;
     FAN_TRIS = 0;
 // LED on
-#ifdef USE_LED
     LED_LAT = 0;
     LED_TRIS = 0;
-#endif
 
 // Mane timer
     T0CON = 0b10001000;
@@ -666,32 +667,7 @@ int main(int argc, char** argv)
     INTCONbits.TMR0IF = 0;
     INTCONbits.TMR0IE = 1;
 
-// PWM timer
-    T1CON = 0b10000001;
-    uint16_t value = -SERVO_PERIOD + servo_pwm;
-    TMR1H = value >> 8;
-    TMR1L = value & 0xff;
-    PIR1bits.TMR1IF = 0;
-    PIE1bits.TMR1IE = 1;
-
-// delay
-    uint8_t tick = 0;
-    while(tick < HZ)
-    {
-        if(INTCONbits.TMR0IF)
-        {
-            TMR0H = (TIMER_VALUE) >> 8;
-            TMR0L = (TIMER_VALUE) & 0xff;
-            INTCONbits.TMR0IF = 0;
-            tick++;
-        }
-    }
-
     print_text("\n\n\n\nWelcome to filament drier\n");
-
-//    print_number(servo_pwm);
-//    print_number(servo_pwm2);
-//    print_lf();
 
 #ifndef TEST_PUMP
     print_text("Initializing sensors\n");
@@ -723,17 +699,14 @@ int main(int argc, char** argv)
         
 #endif // TEST_AHT20
 
-
-        if(flags.update_servo)
+        if(flags.update_pump)
         {
-            flags.update_servo = 0;
-            duty_counter++;
+            flags.update_pump = 0;
 
 #ifndef TEST_PUMP
             read_aht20(&inside);
             read_aht20(&outside);
 
-// skip a certain number of sensor readings between prints
             print_counter++;
             if(print_counter >= PRINT_DOWNSAMPLE)
             {
@@ -753,33 +726,49 @@ int main(int argc, char** argv)
                 FAN_LAT = 1;
             }
 
-//print_text("servo test\n");
-            if(inside.dp > outside.dp + ON_THRESHOLD &&
-                servo_pwm != SERVO_OPEN)
+// the big switch
+            if(!PUMP_LAT)
             {
-// open the valve
-//print_text("SERVO_OPEN\n");
-                servo_pwm = SERVO_OPEN;
-                duty_counter = 0;
-                flags.servo_enabled = 1;
+                if(flags.timed_out)
+                {
+                    duty_counter++;
+                    if(duty_counter >= DUTY_CYCLE_OFF)
+                    {
+                        flags.timed_out = 0;
+                        //print_text("reached DUTY_CYCLE_OFF");
+                    }
+                }
+
+                if(inside.dp > outside.dp + ON_THRESHOLD &&
+#ifdef USE_FUSE
+                    !flags.fuse_blown &&
+#endif
+                    !flags.timed_out)
+                {
+// start the pump
+                    PUMP_LAT = 1;
+#ifdef USE_FUSE
+                    flags.ignore_fuse = 1;
+#endif
+                    duty_counter = 0;
+                }
             }
             else
-            if(inside.dp < outside.dp + OFF_THRESHOLD &&
-                servo_pwm != SERVO_CLOSE)
+            if(PUMP_LAT)
             {
-// close the valve
-//print_text("SERVO_CLOSE\n");
-                servo_pwm = SERVO_CLOSE;
-                duty_counter = 0;
-                flags.servo_enabled = 1;
-            }
-            else
-// no change for a certain number of sensor readings
-// turn servo off
-            if(duty_counter >= DUTY_CYCLE)
-            {
-//print_text("SERVO DISABLED\n");
-                flags.servo_enabled = 0;
+                duty_counter++;
+                if(inside.dp < outside.dp + OFF_THRESHOLD ||
+                    duty_counter >= DUTY_CYCLE_ON)
+                {
+// stop the pump
+                    PUMP_LAT = 0;
+                    if(duty_counter >= DUTY_CYCLE_ON)
+                    {
+                        flags.timed_out = 1;
+                        duty_counter = 0;
+                        //print_text("reached DUTY_CYCLE_ON");
+                    }
+                }
             }
 
             if(print_counter >= PRINT_DOWNSAMPLE)
@@ -810,6 +799,25 @@ int main(int argc, char** argv)
 
 
         }
+
+
+#ifdef USE_FUSE
+        if(flags.got_fuse)
+        {
+            flags.got_fuse = 0;
+            
+            if(PUMP_LAT)
+            {
+//                 print_text("F: ");
+//                 print_number(fuse_value);
+//                 if(flags.ignore_fuse)
+//                 {
+//                     print_text("*");
+//                 }
+//                 print_lf();
+            }
+        }
+#endif // USE_FUSE
     }
 
 
@@ -823,57 +831,84 @@ void interrupt isr()
 	{
 		flags.interrupt_complete = 1;
 
-        if(PIR1bits.TMR1IF)
-        {
-            flags.interrupt_complete = 0;
-            if(flags.pwm_on == 0)
-            {
-// begin PWM waveform
-                if(flags.servo_enabled)
-                {
-                    SERVO_LAT = 1;
-                }
-                flags.pwm_on = 1;
-                uint16_t value = -servo_pwm2;
-                TMR1H = value >> 8;
-                TMR1L = value & 0xff;
-            }
-            else
-            {
-                SERVO_LAT = 0;
-                flags.pwm_on = 0;
-                uint16_t value = -SERVO_PERIOD + servo_pwm2;
-                TMR1H = value >> 8;
-                TMR1L = value & 0xff;
-                servo_pwm2 = servo_pwm;
-            }
-            PIR1bits.TMR1IF = 0;
-        }
-
 
 // mane timer wrapped
         if(INTCONbits.TMR0IF)
         {
 			flags.interrupt_complete = 0;
             INTCONbits.TMR0IF = 0;
-            TMR0H = (TIMER_VALUE) >> 8;
-            TMR0L = (TIMER_VALUE) & 0xff;
-            servo_tick++;
-#ifdef USE_LED
+            TMR0 = TIMER_VALUE;
+            pump_tick++;
             led_tick++;
-#endif
+#ifdef USE_FUSE
+            fuse_tick++;
+
+            if(fuse_tick == FUSE_INTERVAL)
+            {
+                fuse_tick = 0;
+                flags.got_fuse = 1;
+                fuse_value = fuse_accum / fuse_count;
+                fuse_accum = 0;
+                fuse_count = 0;
+
+                if(PUMP_LAT)
+                {
+// wait for starting torque
+                    if(flags.ignore_fuse && 
+                        pump_tick > FUSE_DEADBAND)
+                    {
+                        flags.ignore_fuse = 0;
+                    }
+
+// stop the pump if fuse blown
+                    if(!flags.ignore_fuse)
+                    {
+                        if(fuse_value < FUSE_THRESHOLD)
+                        {
+                            flags.fuse_blown = 1;
+                            PUMP_LAT = 0;
+                        }
+                    }
+                }
+            }
+#endif //USE_FUSE
 
 
 // probe sensors
-            if(servo_tick == SERVO_INTERVAL)
+            if(pump_tick == PUMP_INTERVAL)
             {
-                flags.update_servo = 1;
-                servo_tick = 0;
+                flags.update_pump = 1;
+                pump_tick = 0;
             }
 
+// flash LED if fuse blown
+#ifdef USE_FUSE
+            if(led_tick == HZ / 2)
+            {
+//print_text("TEST TEST TEST\n");
+                led_tick = 0;
+                if(flags.fuse_blown)
+                {
+                    LED_LAT = !LED_LAT;
+                }
+            }
+#endif // USE_FUSE
         }
 
+#ifdef USE_FUSE
+        if(PIR1bits.ADIF)
+        {
+            PIR1bits.ADIF = 0;
+            flags.interrupt_complete = 0;
+            fuse_accum += ADRESH;
+            fuse_count++;
+
+            ADCON0bits.GO = 1;
+        }
+#endif // USE_FUSE
+
 		if(flags.interrupt_complete) break;
+
     }
 }
 

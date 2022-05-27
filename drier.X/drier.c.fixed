@@ -18,6 +18,8 @@
  * 
  */
 
+
+
 // AHT20 source code: 
 // https://github.com/adafruit/Adafruit_AHTX0/blob/master/
 // I2C interface:
@@ -104,11 +106,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <pic18lf1320.h>
-#include <math.h>
+#include <pic18lf1220.h>
 
 // A0 - LED
-// A1 - servo
+// A1 - pump
+// A2/AN2 - resistor fuse
 // A3 - fan
 // B3 - I2C 0 clock
 // B2 - I2C 0 data
@@ -119,59 +121,50 @@
 // always toggle the pump instead of testing dew point
 //#define TEST_PUMP
 
+// fixed point multiple
+#define FIXED 256
 
 // turn on if inside dew point is this much above outside dew point
-#define ON_THRESHOLD 2.0
+#define ON_THRESHOLD (2 * FIXED)
 
 // turn off if inside dew point is this much above outside dew point
-#define OFF_THRESHOLD 1.0
+#define OFF_THRESHOLD (1 * FIXED)
 
 // time between sensor readings
-#define SERVO_INTERVAL (HZ * 5)
-// time to run servo as number of sensor readings
-// this prevents motor wear
-#define DUTY_CYCLE 1
-// PWM timer value for open valve
-#define SERVO_OPEN 1900
-// PWM timer value for closed valve
-#define SERVO_CLOSE 3900
-// starting PWM timer value
-#define SERVO_INIT 2700
-// PWM timer value for 50hz
-#define SERVO_PERIOD 30000
+#define PUMP_INTERVAL (HZ * 5)
+// duty cycle as number of sensor readings
+// this limits the maximum rate of drying but also prevents motor burnout
+#define DUTY_CYCLE_ON 24
+#define DUTY_CYCLE_OFF 6
+// time between fuse tests
+#define FUSE_INTERVAL (HZ / 4)
+// ticks to wait after starting
+#define FUSE_DEADBAND (HZ)
+// ADC value for blown fuse
+#define FUSE_THRESHOLD 210
 
+uint32_t fuse_accum;
+uint8_t fuse_value;
+uint16_t fuse_count;
 
-//#define USE_LED
-
-
-#define SERVO_TRIS TRISAbits.TRISA1
-#define SERVO_LAT LATAbits.LATA1
+#define PUMP_TRIS TRISAbits.TRISA1
+#define PUMP_LAT LATAbits.LATA1
 
 #define FAN_TRIS TRISAbits.TRISA3
 #define FAN_LAT LATAbits.LATA3
 
-#ifdef USE_LED
 #define LED_TRIS TRISAbits.TRISA0
 #define LED_LAT LATAbits.LATA0
-#endif
 
 // Mane timer values
 #define HZ 32
-#define TIMER_VALUE -62496
-// ticks since the last sensor reading
-volatile uint8_t servo_tick = 0;
-volatile uint16_t servo_pwm = SERVO_INIT;
-// value to be only updated in the interrupt handler
-volatile uint16_t servo_pwm2 = SERVO_INIT;
-#ifdef USE_LED
+#define TIMER_VALUE -7812
+volatile uint8_t pump_tick = 0;
+// count ticks for averaging fuse value
+volatile uint8_t fuse_tick = 0;
 volatile uint8_t led_tick = 0;
-#endif
-
-// sensor readings since the servo was turned on
+// count sensor readings during duty cycle
 volatile uint8_t duty_counter = 0;
-// downsample the output
-uint8_t print_counter = 0;
-#define PRINT_DOWNSAMPLE 6
 
 #define I2C_ADDRESS (0x38 << 1)
 #define AHTX0_I2CADDR_DEFAULT 0x38   ///< AHT default i2c address
@@ -182,6 +175,7 @@ uint8_t print_counter = 0;
 #define AHTX0_STATUS_CALIBRATED 0x08 ///< Status bit for calibrated
 
 
+extern const uint8_t log_table[];
 
 
 typedef union 
@@ -189,9 +183,11 @@ typedef union
 	struct
 	{
 		unsigned interrupt_complete : 1;
-        unsigned update_servo : 1;
-        unsigned servo_enabled : 1; // drive the PWM pin
-        unsigned pwm_on : 1; // which part of the PWM waveform we're in
+        unsigned update_pump : 1;
+        unsigned fuse_blown : 1; // don't start pump
+        unsigned ignore_fuse : 1; // ignore fuse until deadband is complete
+        unsigned got_fuse : 1; // got new fuse value
+        unsigned timed_out : 1; // hit duty cycle
 	};
 	
 	unsigned char value;
@@ -201,9 +197,9 @@ volatile flags_t flags;
 typedef struct
 {
     uint8_t port;
-    float h;
-    float t;
-    float dp;
+    int16_t h; // 8 bit whole, 8 bit fraction
+    int16_t t; // 8 bit whole, 8 bit fraction
+    int16_t dp; // 8 bit whole, 8 bit fraction
 } aht20_t;
 
 aht20_t inside;
@@ -214,7 +210,6 @@ uint8_t i2c_buffer[8];
 #define I2C_OAR1_ADD0 ((uint32_t)0x00000001)
 #define I2C_7BIT_ADD_WRITE(__ADDRESS__) ((uint8_t)((__ADDRESS__) & (~I2C_OAR1_ADD0)))
 #define I2C_7BIT_ADD_READ(__ADDRESS__) ((uint8_t)((__ADDRESS__) | I2C_OAR1_ADD0))
-
 
 void send_uart(uint8_t c)
 {
@@ -281,7 +276,8 @@ void print_number(int16_t x)
         force = 1; \
     }
 
-void print_float(float x)
+// 8 bit whole + 8 bit fraction
+void print_fixed(int16_t x)
 {
     if(x < 0)
     {
@@ -289,7 +285,7 @@ void print_float(float x)
         x = -x;
     }
 
-    uint8_t whole = (uint8_t)x;
+    uint8_t whole = x / FIXED;
     uint8_t force = 0;
     
     uint16_t base = 100;
@@ -298,11 +294,11 @@ void print_float(float x)
         NUMBER_MACRO2(base, whole)
         base /= 10;
     }
-    send_uart('0' + whole);
+    send_uart('0');
     send_uart('.');
 
 
-    uint16_t frac = (uint16_t)(x * 100) % 100;
+    uint16_t frac = (x & 0xff) * 100 / FIXED;
     force = 1;
     NUMBER_MACRO(10, frac)
     send_uart('0' + frac);
@@ -522,10 +518,28 @@ uint8_t aht20_status(uint8_t port)
 // TRACE
 // print_number(i2c_buffer[0]);
 // print_lf();
-// flush_uart();
     return i2c_buffer[0];
 }
 
+int16_t log_lookup(uint8_t x)
+{
+    int16_t y = -log_table[x];
+    if(x <= 1)
+    {
+        return y << 3;
+    }
+    else
+    if(x <= 13)
+    {
+        return y << 2;
+    }
+    else
+    if(x <= 36)
+    {
+        return y << 1;
+    }
+    return y;
+}
 
 void read_aht20(aht20_t *ptr)
 {
@@ -547,21 +561,21 @@ void read_aht20(aht20_t *ptr)
     x |= i2c_buffer[2];
     x <<= 4;
     x |= i2c_buffer[3] >> 4;
-    ptr->h = (float)(x * 100) / 0x100000;
+    ptr->h = x * 100 / 0x1000;
 
     x = i2c_buffer[3] & 0x0f;
     x <<= 8;
     x |= i2c_buffer[4];
     x <<= 8;
     x |= i2c_buffer[5];
-    ptr->t = (float)(x * 200) / 0x100000 - 50;
+    ptr->t = x * 200 / 0x1000 - 50 * FIXED;
 
 // dewpoint calculation
 // https://en.wikipedia.org/wiki/Dew_point#Calculating_the_dew_point
-    const float B = 17.67;
-    const float C = 243.5;
+    const int32_t B = (int32_t)(17.67 * FIXED);
+    const int32_t C = (int32_t)(243.5 * FIXED);
     
-    float y = log(ptr->h / 100) + 
+    int32_t y = (int32_t)log_lookup(ptr->h / FIXED) + 
         B * ptr->t / (C + ptr->t);
     ptr->dp = C * y / (B - y);
     
@@ -587,11 +601,11 @@ void init_aht20(aht20_t *ptr, uint8_t port)
 
 void print_sensor(aht20_t *ptr)
 {
-    print_float(ptr->t);
+    print_fixed(ptr->t);
     print_text("\xb0 ");
-    print_float(ptr->h);
+    print_fixed(ptr->h);
     print_text("% ");
-    print_float(ptr->dp);
+    print_fixed(ptr->dp);
     print_text("\xb0 ");
 }
 
@@ -599,32 +613,22 @@ int main(int argc, char** argv)
 {
 // set the oscillator
 // 1Mhz
-    OSCCON = 0b01110000;
-// make the UART support higher temperatures at 1Mhz
+    OSCCON = 0b01000000;
+// tweek the BAUD if clockspeed is 31000
 //    OSCTUNE = 24;
-
-
-#ifdef USE_FUSE
 // start the ADC
     ADCON1 = 0b11111011;
     ADCON0 = 0b00001001;
     ADCON2 = 0b00111110;
     PIE1bits.ADIE = 1;
     ADCON0bits.GO = 1;
-#endif // USE_FUSE
 
 	flags.value = 0;
-    flags.servo_enabled = 1;
-    servo_tick = 0;
-#ifdef USE_LED
-    led_tick = 0;
-#endif
-
-#ifdef USE_FUSE
+    pump_tick = 0;
     fuse_tick = 0;
+    led_tick = 0;
     fuse_accum = 0;
     fuse_count = 0;
-#endif
 
 // debug port
     TXSTA = 0b00100100;
@@ -633,10 +637,8 @@ int main(int argc, char** argv)
     BAUDCTL = 0b00001000;
 // 1200 baud from 31khz
 //    SPBRG = 6;
-// 9600 baud at 1Mhz clock
-//    SPBRG = 26;
-// 9600 baud at 8Mhz clock
-    SPBRG = 208;
+// 9600 baud from 1Mhz
+    SPBRG = 26;
 
 
 // I2C ports
@@ -650,15 +652,14 @@ int main(int argc, char** argv)
     LATBbits.LATB3 = 0;
     LATBbits.LATB2 = 0;
 
-    SERVO_LAT = 0;
-    SERVO_TRIS = 0;
+// MOSFET ports
+    PUMP_LAT = 0;
+    PUMP_TRIS = 0;
     FAN_LAT = 0;
     FAN_TRIS = 0;
 // LED on
-#ifdef USE_LED
     LED_LAT = 0;
     LED_TRIS = 0;
-#endif
 
 // Mane timer
     T0CON = 0b10001000;
@@ -666,38 +667,21 @@ int main(int argc, char** argv)
     INTCONbits.TMR0IF = 0;
     INTCONbits.TMR0IE = 1;
 
-// PWM timer
-    T1CON = 0b10000001;
-    uint16_t value = -SERVO_PERIOD + servo_pwm;
-    TMR1H = value >> 8;
-    TMR1L = value & 0xff;
-    PIR1bits.TMR1IF = 0;
-    PIE1bits.TMR1IE = 1;
-
-// delay
-    uint8_t tick = 0;
-    while(tick < HZ)
-    {
-        if(INTCONbits.TMR0IF)
-        {
-            TMR0H = (TIMER_VALUE) >> 8;
-            TMR0L = (TIMER_VALUE) & 0xff;
-            INTCONbits.TMR0IF = 0;
-            tick++;
-        }
-    }
-
     print_text("\n\n\n\nWelcome to filament drier\n");
-
-//    print_number(servo_pwm);
-//    print_number(servo_pwm2);
-//    print_lf();
 
 #ifndef TEST_PUMP
     print_text("Initializing sensors\n");
     init_aht20(&outside, 0);
     init_aht20(&inside, 1);
 #endif // !TEST_PUMP
+
+// test the log table
+//     uint8_t i;
+//     for(i = 0; i < 100; i++)
+//     {
+//         print_number(log_lookup(i));
+//         print_lf();
+//     }
 
     print_text("Mane loop\n");
 
@@ -723,25 +707,18 @@ int main(int argc, char** argv)
         
 #endif // TEST_AHT20
 
-
-        if(flags.update_servo)
+        if(flags.update_pump)
         {
-            flags.update_servo = 0;
-            duty_counter++;
+            flags.update_pump = 0;
 
 #ifndef TEST_PUMP
             read_aht20(&inside);
             read_aht20(&outside);
 
-// skip a certain number of sensor readings between prints
-            print_counter++;
-            if(print_counter >= PRINT_DOWNSAMPLE)
-            {
-                print_text("I: ");
-                print_sensor(&inside);
-                print_text("O: ");
-                print_sensor(&outside);
-            }
+            print_text("I: ");
+            print_sensor(&inside);
+            print_text("O: ");
+            print_sensor(&outside);
 
 // turn fan on if inside temp is higher than outside temp
             if(inside.t < outside.t)
@@ -753,53 +730,56 @@ int main(int argc, char** argv)
                 FAN_LAT = 1;
             }
 
-//print_text("servo test\n");
-            if(inside.dp > outside.dp + ON_THRESHOLD &&
-                servo_pwm != SERVO_OPEN)
+// the big switch
+            if(!PUMP_LAT)
             {
-// open the valve
-//print_text("SERVO_OPEN\n");
-                servo_pwm = SERVO_OPEN;
-                duty_counter = 0;
-                flags.servo_enabled = 1;
-            }
-            else
-            if(inside.dp < outside.dp + OFF_THRESHOLD &&
-                servo_pwm != SERVO_CLOSE)
-            {
-// close the valve
-//print_text("SERVO_CLOSE\n");
-                servo_pwm = SERVO_CLOSE;
-                duty_counter = 0;
-                flags.servo_enabled = 1;
-            }
-            else
-// no change for a certain number of sensor readings
-// turn servo off
-            if(duty_counter >= DUTY_CYCLE)
-            {
-//print_text("SERVO DISABLED\n");
-                flags.servo_enabled = 0;
-            }
+                if(flags.timed_out)
+                {
+                    duty_counter++;
+                    if(duty_counter >= DUTY_CYCLE_OFF)
+                    {
+                        flags.timed_out = 0;
+                        print_text("reached DUTY_CYCLE_OFF");
+                    }
+                }
 
-            if(print_counter >= PRINT_DOWNSAMPLE)
-            {
-                print_counter = 0;
-                print_lf();
+                if(inside.dp > outside.dp + ON_THRESHOLD &&
+                    !flags.fuse_blown &&
+                    !flags.timed_out)
+                {
+// start the pump
+                    PUMP_LAT = 1;
+                    flags.ignore_fuse = 1;
+                    duty_counter = 0;
+                }
             }
+            else
+            if(PUMP_LAT)
+            {
+                duty_counter++;
+                if(inside.dp < outside.dp + OFF_THRESHOLD ||
+                    duty_counter >= DUTY_CYCLE_ON)
+                {
+// stop the pump
+                    PUMP_LAT = 0;
+                    if(duty_counter >= DUTY_CYCLE_ON)
+                    {
+                        flags.timed_out = 1;
+                        duty_counter = 0;
+                        print_text("reached DUTY_CYCLE_ON");
+                    }
+                }
+            }
+            print_lf();
 
 #else // !TEST_PUMP
             if(!PUMP_LAT)
             {
-#ifdef USE_FUSE
                 if(!flags.fuse_blown)
                 {
-#endif
                     PUMP_LAT = 1;
-#ifdef USE_FUSE
                     flags.ignore_fuse = 1;
                 }
-#endif
             }
             else
             {
@@ -809,6 +789,23 @@ int main(int argc, char** argv)
 
 
 
+        }
+
+
+        if(flags.got_fuse)
+        {
+            flags.got_fuse = 0;
+            
+            if(PUMP_LAT)
+            {
+//                 print_text("F: ");
+//                 print_number(fuse_value);
+//                 if(flags.ignore_fuse)
+//                 {
+//                     print_text("*");
+//                 }
+//                 print_lf();
+            }
         }
     }
 
@@ -823,57 +820,76 @@ void interrupt isr()
 	{
 		flags.interrupt_complete = 1;
 
-        if(PIR1bits.TMR1IF)
-        {
-            flags.interrupt_complete = 0;
-            if(flags.pwm_on == 0)
-            {
-// begin PWM waveform
-                if(flags.servo_enabled)
-                {
-                    SERVO_LAT = 1;
-                }
-                flags.pwm_on = 1;
-                uint16_t value = -servo_pwm2;
-                TMR1H = value >> 8;
-                TMR1L = value & 0xff;
-            }
-            else
-            {
-                SERVO_LAT = 0;
-                flags.pwm_on = 0;
-                uint16_t value = -SERVO_PERIOD + servo_pwm2;
-                TMR1H = value >> 8;
-                TMR1L = value & 0xff;
-                servo_pwm2 = servo_pwm;
-            }
-            PIR1bits.TMR1IF = 0;
-        }
-
 
 // mane timer wrapped
         if(INTCONbits.TMR0IF)
         {
 			flags.interrupt_complete = 0;
             INTCONbits.TMR0IF = 0;
-            TMR0H = (TIMER_VALUE) >> 8;
-            TMR0L = (TIMER_VALUE) & 0xff;
-            servo_tick++;
-#ifdef USE_LED
+            TMR0 = TIMER_VALUE;
+            pump_tick++;
             led_tick++;
-#endif
+            fuse_tick++;
 
-
-// probe sensors
-            if(servo_tick == SERVO_INTERVAL)
+            if(fuse_tick == FUSE_INTERVAL)
             {
-                flags.update_servo = 1;
-                servo_tick = 0;
+                fuse_tick = 0;
+                flags.got_fuse = 1;
+                fuse_value = fuse_accum / fuse_count;
+                fuse_accum = 0;
+                fuse_count = 0;
+                
+                if(PUMP_LAT)
+                {
+// wait for starting torque
+                    if(flags.ignore_fuse && 
+                        pump_tick > FUSE_DEADBAND)
+                    {
+                        flags.ignore_fuse = 0;
+                    }
+
+// stop the pump if fuse blown
+                    if(!flags.ignore_fuse)
+                    {
+                        if(fuse_value < FUSE_THRESHOLD)
+                        {
+                            flags.fuse_blown = 1;
+                            PUMP_LAT = 0;
+                        }
+                    }
+                }
             }
 
+// probe sensors
+            if(pump_tick == PUMP_INTERVAL)
+            {
+                flags.update_pump = 1;
+                pump_tick = 0;
+            }
+
+// flash LED if fuse blown
+            if(led_tick == HZ / 2)
+            {
+                led_tick = 0;
+                if(flags.fuse_blown)
+                {
+                    LED_LAT = !LED_LAT;
+                }
+            }
+        }
+
+        if(PIR1bits.ADIF)
+        {
+            PIR1bits.ADIF = 0;
+            flags.interrupt_complete = 0;
+            fuse_accum += ADRESH;
+            fuse_count++;
+
+            ADCON0bits.GO = 1;
         }
 
 		if(flags.interrupt_complete) break;
+
     }
 }
 
