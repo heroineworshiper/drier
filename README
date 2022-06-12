@@ -11,6 +11,8 @@ Temperature & humidity are measured by 2 AHT20's.  Everything runs on
 5V.  A fan circulates air in the container.  The pump has a software
 fuse to detect stalls.  The tube is 1/4" tube.
 
+Gravity keeps air from exchanging through the inlet.  The pump is air tight.
+
 It could in theory run in less memory if it uses fixed point.  Floating
 point has better accuracy.
 
