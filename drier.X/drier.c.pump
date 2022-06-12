@@ -1,5 +1,5 @@
 /*
- * Filament drier
+ * Filament drier using a vacuum pump
  * Copyright (C) 2022 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
@@ -135,7 +135,7 @@
 #define DUTY_CYCLE_OFF 6
 
 // If the pump is prone to stalling
-//#define USE_FUSE
+#define USE_FUSE
 
 #ifdef USE_FUSE
 // time between fuse tests
@@ -176,6 +176,9 @@ volatile uint8_t duty_counter = 0;
 uint8_t print_counter = 0;
 #define PRINT_DOWNSAMPLE 6
 
+
+
+// AHT20 stuff
 #define I2C_ADDRESS (0x38 << 1)
 #define AHTX0_I2CADDR_DEFAULT 0x38   ///< AHT default i2c address
 #define AHTX0_CMD_CALIBRATE 0xE1     ///< Calibration command
@@ -638,6 +641,7 @@ int main(int argc, char** argv)
     BAUDCTL = 0b00001000;
 // 1200 baud from 31khz
 //    SPBRG = 6;
+// 9600 baud at 1Mhz clock
     SPBRG = 26;
 
 
@@ -666,6 +670,19 @@ int main(int argc, char** argv)
     TMR0 = TIMER_VALUE;
     INTCONbits.TMR0IF = 0;
     INTCONbits.TMR0IE = 1;
+
+// delay
+    uint8_t tick = 0;
+    while(tick < HZ)
+    {
+        if(INTCONbits.TMR0IF)
+        {
+            TMR0H = (TIMER_VALUE) >> 8;
+            TMR0L = (TIMER_VALUE) & 0xff;
+            INTCONbits.TMR0IF = 0;
+            tick++;
+        }
+    }
 
     print_text("\n\n\n\nWelcome to filament drier\n");
 

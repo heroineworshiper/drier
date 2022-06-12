@@ -1,5 +1,5 @@
 /*
- * Filament drier
+ * Filament drier using 2 butterfly valves
  * Copyright (C) 2022 Adam Williams <broadcast at earthling dot net>
  * 
  * This program is free software; you can redistribute it and/or modify
@@ -173,6 +173,9 @@ volatile uint8_t duty_counter = 0;
 uint8_t print_counter = 0;
 #define PRINT_DOWNSAMPLE 6
 
+
+
+// AHT20 stuff
 #define I2C_ADDRESS (0x38 << 1)
 #define AHTX0_I2CADDR_DEFAULT 0x38   ///< AHT default i2c address
 #define AHTX0_CMD_CALIBRATE 0xE1     ///< Calibration command
@@ -598,7 +601,7 @@ void print_sensor(aht20_t *ptr)
 int main(int argc, char** argv) 
 {
 // set the oscillator
-// 1Mhz
+// 8Mhz
     OSCCON = 0b01110000;
 // make the UART support higher temperatures at 1Mhz
 //    OSCTUNE = 24;

@@ -1,20 +1,27 @@
 Solar filament drier
 
 This measures dew point on the inside & outside of a container.  When
-the outside dewpoint is lower than the inside dewpoint, it opens a valve
-to replace the air.
+the outside dewpoint is lower than the inside dewpoint, it turns on a
+pump to replace the air.
 
-It's based on a PIC 18F1320 with a MOSFET to control a fan & PWM for a
-servo controlled butterfly valve. 
+It's based on a PIC 18F1320 with MOSFETS to control a circulation fan &
+pump. 
 
 Temperature & humidity are measured by 2 AHT20's.  Everything runs on
-5V.  A fan circulates air in the container.
+5V.  A fan circulates air in the container.  The pump has a software
+fuse to detect stalls.  The tube is 1/4" tube.
 
-diagram2.png: high level diagram of the circuit
+It could in theory run in less memory if it uses fixed point.  Floating
+point has better accuracy.
+
+
+diagram.png: diagram of the gadget
+
 
 drier.X: firmware
 
-plug.FCStd: airtight seal for routing wires into the container
+plug.FCStd: airtight seal for routing stuff into the container
+ - change tube_r to route tube or wires into the container
 
 *.ods: data from test runs
 
@@ -22,10 +29,11 @@ tables.py: generate the fixed point log table
 
 test.c: test the fixed point log table
 
-valve2.FCStd: 3D printed butterfly valve
+valve2.FCStd: failed 3D printed butterfly valve
 
+blower2.FCStd: failed blower attachment
 
-
+elbow.FCStd: failed elbow for 3/4" tube
 
 
 
